@@ -1,4 +1,5 @@
 import { Navigate, Route, Routes } from 'react-router-dom'
+import CuttingBench from '../pages/CuttingBench'
 import DiagramEditor from '../pages/DiagramEditor'
 import FurnitureIndex from '../pages/FurnitureIndex'
 import JointDetail from '../pages/JointDetail'
@@ -14,6 +15,7 @@ export default function AppRoutes() {
       <Route path="/joints/:id/steps" element={<StepBoard />} />
       <Route path="/joints/:id/diagram" element={<DiagramEditor />} />
       <Route path="/furniture" element={<FurnitureIndex />} />
+      <Route path="/cutting" element={<CuttingBench />} />
       <Route path="*" element={<Navigate to="/joints" replace />} />
     </Routes>
   )

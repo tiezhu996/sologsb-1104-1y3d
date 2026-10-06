@@ -1,4 +1,5 @@
 import Dexie, { type Table } from 'dexie'
+import type { BoardStock, CutBatch, CutComponent, CutRecord } from '../types/cutting'
 import type { Diagram, HitArea } from '../types/diagram'
 import type { Furniture } from '../types/furniture'
 import type { JointType } from '../types/jointType'
@@ -11,6 +12,10 @@ export class MortiseDatabase extends Dexie {
   steps!: Table<DisassemblyStep, string>
   diagrams!: Table<Diagram, string>
   furniture!: Table<Furniture, string>
+  boards!: Table<BoardStock, string>
+  cutComponents!: Table<CutComponent, string>
+  cutBatches!: Table<CutBatch, string>
+  cutRecords!: Table<CutRecord, string>
 
   constructor() {
     super('gbmortise-db')
@@ -40,8 +45,40 @@ export class MortiseDatabase extends Dexie {
         furniture.schemaRev = 2
       })
     })
+
+    // version(3)：开料台——板材台账、待加工构件、开料批次（草稿）与开料流水
+    this.version(3).stores({
+      ...schema,
+      boards: 'id, code, status, source, parentBoardId, batchId',
+      cutComponents: 'id, grainMode, rev',
+      cutBatches: 'id, status, updatedAt',
+      cutRecords: 'id, batchId, confirmedAt',
+    }).upgrade(async (transaction) => {
+      const boardTable = transaction.table<BoardStock, string>('boards')
+      const componentTable = transaction.table<CutComponent, string>('cutComponents')
+      if (await boardTable.count() === 0) {
+        await boardTable.bulkAdd(boardSeeds)
+      }
+      if (await componentTable.count() === 0) {
+        await componentTable.bulkAdd(cutComponentSeeds)
+      }
+    })
   }
 }
+
+const boardSeeds: BoardStock[] = [
+  { id: 'board-seed-beech-a', code: 'YL-001', species: '榉木', grain: 'along', lengthMm: 1200, widthMm: 300, thicknessMm: 40, status: 'in_stock', source: 'purchase', rev: 1, createdAt: Date.now() },
+  { id: 'board-seed-beech-b', code: 'YL-002', species: '榉木', grain: 'along', lengthMm: 900, widthMm: 240, thicknessMm: 30, status: 'in_stock', source: 'purchase', rev: 1, createdAt: Date.now() },
+  { id: 'board-seed-walnut-a', code: 'YL-003', species: '黑胡桃', grain: 'along', lengthMm: 1000, widthMm: 260, thicknessMm: 35, status: 'in_stock', source: 'purchase', rev: 1, createdAt: Date.now() },
+  { id: 'board-seed-walnut-cross', code: 'YL-004', species: '黑胡桃', grain: 'cross', lengthMm: 800, widthMm: 200, thicknessMm: 30, status: 'in_stock', source: 'purchase', rev: 1, createdAt: Date.now() },
+]
+
+const cutComponentSeeds: CutComponent[] = [
+  { id: 'cut-comp-seed-dabian', name: '大边料', grainMode: 'along', lengthMm: 680, widthMm: 60, thicknessMm: 32, qty: 2, rev: 1, createdAt: Date.now() },
+  { id: 'cut-comp-seed-matou', name: '抹头料', grainMode: 'along', lengthMm: 420, widthMm: 54, thicknessMm: 32, qty: 2, rev: 1, createdAt: Date.now() },
+  { id: 'cut-comp-seed-sunyan', name: '榫眼料', grainMode: 'along', lengthMm: 150, widthMm: 58, thicknessMm: 35, qty: 4, rev: 1, createdAt: Date.now() },
+  { id: 'cut-comp-seed-dangban', name: '档板短料', grainMode: 'any', lengthMm: 220, widthMm: 180, thicknessMm: 30, qty: 2, rev: 1, createdAt: Date.now() },
+]
 
 function makeSeedSvg(title: string, memberIds: [string, string, string], labels: [string, string, string]): string {
   const [firstId, secondId, thirdId] = memberIds
@@ -175,12 +212,14 @@ const furnitureSeeds: Furniture[] = [
 export const db = new MortiseDatabase()
 
 async function writeSeedData(): Promise<void> {
-  await db.transaction('rw', [db.joints, db.members, db.steps, db.diagrams, db.furniture], async () => {
+  await db.transaction('rw', [db.joints, db.members, db.steps, db.diagrams, db.furniture, db.boards, db.cutComponents, db.cutBatches, db.cutRecords], async () => {
     await db.joints.bulkAdd(jointSeeds.map((item) => ({ ...item, schemaRev: 2 })))
     await db.members.bulkAdd(memberSeeds.map((item) => ({ ...item, schemaRev: 2 })))
     await db.steps.bulkAdd(stepSeeds.map((item) => ({ ...item, schemaRev: 2 })))
     await db.diagrams.bulkAdd(diagramSeeds.map((item) => ({ ...item, schemaRev: 2 })))
     await db.furniture.bulkAdd(furnitureSeeds.map((item) => ({ ...item, schemaRev: 2 })))
+    await db.boards.bulkAdd(boardSeeds)
+    await db.cutComponents.bulkAdd(cutComponentSeeds)
   })
 }
 

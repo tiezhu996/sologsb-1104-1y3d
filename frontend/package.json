@@ -6,7 +6,9 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "verify:packing": "esbuild scripts/verify-packing.ts --bundle --platform=node --format=esm --outfile=node_modules/.cache/verify-packing.mjs && node node_modules/.cache/verify-packing.mjs",
+    "verify:cutting": "esbuild scripts/verify-cutting.ts --bundle --platform=node --format=esm --outfile=node_modules/.cache/verify-cutting.mjs && node node_modules/.cache/verify-cutting.mjs"
   },
   "dependencies": {
     "dexie": "^4.0.8",
@@ -20,6 +22,7 @@
     "@types/react-dom": "^18.3.1",
     "@vitejs/plugin-react": "^4.3.2",
     "autoprefixer": "^10.4.20",
+    "fake-indexeddb": "^6.2.5",
     "postcss": "^8.4.47",
     "tailwindcss": "^3.4.13",
     "typescript": "^5.6.2",

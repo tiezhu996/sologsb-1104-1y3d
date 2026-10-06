@@ -6,6 +6,7 @@ import { SizeField } from '../components/common/SizeField'
 import { StepRail } from '../components/common/StepRail'
 import { useStepOrder } from '../hooks/useStepOrder'
 import { useJointStore } from '../stores/jointStore'
+import type { Member } from '../types/member'
 import { checkTolerance, formatDimension } from '../utils/measure'
 import { exportJointData } from '../utils/export'
 
@@ -18,6 +19,7 @@ export default function JointDetail() {
   const loading = useJointStore((state) => state.loading)
   const loadAll = useJointStore((state) => state.loadAll)
   const updateMemberDimensions = useJointStore((state) => state.updateMemberDimensions)
+  const updateMemberGrain = useJointStore((state) => state.updateMemberGrain)
   const { steps, totalDurationSec, currentStepIndex, move, setCurrentStep } = useStepOrder(id)
 
   useEffect(() => {
@@ -109,7 +111,21 @@ export default function JointDetail() {
                         <span className="mt-1 block max-w-52 text-xs leading-5 text-stone-500">{member.note}</span>
                       </td>
                       <td className="whitespace-nowrap px-4 py-4 text-stone-600">{member.part}</td>
-                      <td className="whitespace-nowrap px-4 py-4 text-stone-600">{member.grainDir}</td>
+                      <td className="whitespace-nowrap px-3 py-3">
+                        <select
+                          aria-label={`${member.name}纹理方向`}
+                          className="rounded-md border border-wood-100 bg-white px-2 py-1.5 text-sm text-wood-700 outline-none focus:border-wood-500"
+                          value={member.grainDir}
+                          onChange={(event) => void updateMemberGrain(
+                            member.id,
+                            event.target.value as Member['grainDir'],
+                          )}
+                        >
+                          <option value="顺纹">顺纹</option>
+                          <option value="横纹">横纹</option>
+                        </select>
+                        <p className="mt-1 text-[11px] text-stone-400">改动后旧开料排样失效</p>
+                      </td>
                       <td className="w-32 px-3 py-3">
                         <SizeField
                           label={`${member.name}长度`}

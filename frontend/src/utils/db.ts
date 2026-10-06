@@ -1,4 +1,5 @@
 import Dexie, { type Table } from 'dexie'
+import type { Board, CutRecord } from '../types/board'
 import type { Diagram, HitArea } from '../types/diagram'
 import type { Furniture } from '../types/furniture'
 import type { JointType } from '../types/jointType'
@@ -11,19 +12,26 @@ export class MortiseDatabase extends Dexie {
   steps!: Table<DisassemblyStep, string>
   diagrams!: Table<Diagram, string>
   furniture!: Table<Furniture, string>
+  boards!: Table<Board, string>
+  cutRecords!: Table<CutRecord, string>
 
   constructor() {
     super('gbmortise-db')
-    const schema = {
+    const schemaV1 = {
       joints: 'id, name, family, difficulty',
       members: 'id, jointTypeId, name, part, lengthMm',
       steps: 'id, jointTypeId, seq, action',
       diagrams: 'id, jointTypeId, stepId, view',
       furniture: 'id, jointTypeId, name',
     }
+    const schemaV3 = {
+      ...schemaV1,
+      boards: 'id, code, grainDir, isRemnant, sourceBoardId, createdAt',
+      cutRecords: 'id, batchNo, cutAt',
+    }
 
-    this.version(1).stores(schema)
-    this.version(2).stores(schema).upgrade(async (transaction) => {
+    this.version(1).stores(schemaV1)
+    this.version(2).stores(schemaV1).upgrade(async (transaction) => {
       await transaction.table<JointType, string>('joints').toCollection().modify((joint) => {
         joint.schemaRev = 2
       })
@@ -39,6 +47,16 @@ export class MortiseDatabase extends Dexie {
       await transaction.table<Furniture, string>('furniture').toCollection().modify((furniture) => {
         furniture.schemaRev = 2
       })
+    })
+    this.version(3).stores(schemaV3).upgrade(async (transaction) => {
+      // 老库的全部构件以当前尺寸登记为第 1 版；并补入初始板材库存
+      await transaction.table<Member, string>('members').toCollection().modify((member) => {
+        if (member.cutRev === undefined) member.cutRev = 1
+      })
+      const boardTable = transaction.table<Board, string>('boards')
+      if (await boardTable.count() === 0) {
+        await boardTable.bulkAdd(boardSeeds)
+      }
     })
   }
 }
@@ -172,15 +190,31 @@ const furnitureSeeds: Furniture[] = [
   { id: 'furniture-guijia', jointTypeId: 'joint-dovetail', name: '柜架', era: '明清', position: '柜体侧板与横枨端部', loadNote: '燕尾榫限制横枨外拔，兼顾客体板面伸缩。' },
 ]
 
+const SEED_BASE_TIME = new Date('2026-09-01T08:00:00+08:00').getTime()
+
+/**
+ * 初始板材库存：纹理沿长边。
+ * 厚板须能容纳 34–38mm 的大边、榫眼类构件；另放两块回库余料演示余料再用。
+ */
+const boardSeeds: Board[] = [
+  { id: 'board-s-001', code: 'SB-S-001', grainDir: '顺纹', lengthMm: 2000, widthMm: 180, thicknessMm: 40, isRemnant: false, createdAt: SEED_BASE_TIME, note: '榆木顺纹厚板' },
+  { id: 'board-s-002', code: 'SB-S-002', grainDir: '顺纹', lengthMm: 1600, widthMm: 150, thicknessMm: 32, isRemnant: false, createdAt: SEED_BASE_TIME, note: '榆木顺纹中板' },
+  { id: 'board-h-001', code: 'SB-H-001', grainDir: '横纹', lengthMm: 1200, widthMm: 200, thicknessMm: 35, isRemnant: false, createdAt: SEED_BASE_TIME, note: '榆木横纹宽板' },
+  { id: 'board-h-002', code: 'SB-H-002', grainDir: '横纹', lengthMm: 900, widthMm: 140, thicknessMm: 30, isRemnant: false, createdAt: SEED_BASE_TIME, note: '榆木横纹板' },
+  { id: 'board-s-r01', code: 'SB-S-001-Y01', grainDir: '顺纹', lengthMm: 520, widthMm: 90, thicknessMm: 40, isRemnant: true, sourceBoardId: 'board-s-001', createdAt: SEED_BASE_TIME + 1000, note: '上次开料回存余料' },
+  { id: 'board-h-r01', code: 'SB-H-001-Y01', grainDir: '横纹', lengthMm: 360, widthMm: 80, thicknessMm: 35, isRemnant: true, sourceBoardId: 'board-h-001', createdAt: SEED_BASE_TIME + 2000, note: '上次开料回存余料' },
+]
+
 export const db = new MortiseDatabase()
 
 async function writeSeedData(): Promise<void> {
-  await db.transaction('rw', [db.joints, db.members, db.steps, db.diagrams, db.furniture], async () => {
+  await db.transaction('rw', [db.joints, db.members, db.steps, db.diagrams, db.furniture, db.boards, db.cutRecords], async () => {
     await db.joints.bulkAdd(jointSeeds.map((item) => ({ ...item, schemaRev: 2 })))
-    await db.members.bulkAdd(memberSeeds.map((item) => ({ ...item, schemaRev: 2 })))
+    await db.members.bulkAdd(memberSeeds.map((item) => ({ ...item, schemaRev: 2, cutRev: 1 })))
     await db.steps.bulkAdd(stepSeeds.map((item) => ({ ...item, schemaRev: 2 })))
     await db.diagrams.bulkAdd(diagramSeeds.map((item) => ({ ...item, schemaRev: 2 })))
     await db.furniture.bulkAdd(furnitureSeeds.map((item) => ({ ...item, schemaRev: 2 })))
+    await db.boards.bulkAdd(boardSeeds)
   })
 }
 

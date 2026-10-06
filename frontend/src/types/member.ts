@@ -14,4 +14,9 @@ export interface Member {
   toleranceMm: number
   note: string
   schemaRev?: number
+  /**
+   * 开料版本：尺寸或纹向每变更一次加一。
+   * 排样会快照当时的 cutRev，与当前值不符则旧排样失效，必须重排。
+   */
+  cutRev?: number
 }

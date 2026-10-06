@@ -22,11 +22,16 @@ interface JointState {
     memberId: string,
     dimensions: Pick<Member, 'lengthMm' | 'widthMm' | 'thicknessMm' | 'toleranceMm'>,
   ) => Promise<void>
+  updateMemberGrain: (memberId: string, grainDir: Member['grainDir']) => Promise<void>
   renameMember: (memberId: string, name: Member['name']) => Promise<void>
 }
 
 function createId(prefix: string): string {
   return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`
+}
+
+function nextCutRev(current: number | undefined): number {
+  return (current ?? 1) + 1
 }
 
 export const useJointStore = create<JointState>((set, get) => ({
@@ -88,10 +93,31 @@ export const useJointStore = create<JointState>((set, get) => ({
   setSelectedJoint: (id) => set({ selectedJointId: id }),
 
   updateMemberDimensions: async (memberId, dimensions) => {
-    await db.members.update(memberId, dimensions)
+    const previous = get().members.find((member) => member.id === memberId)
+    const geometryChanged = !!previous && (
+      previous.lengthMm !== dimensions.lengthMm
+      || previous.widthMm !== dimensions.widthMm
+      || previous.thicknessMm !== dimensions.thicknessMm
+    )
+    const patch: Partial<Member> = geometryChanged
+      ? { ...dimensions, cutRev: nextCutRev(previous?.cutRev) }
+      : dimensions
+    await db.members.update(memberId, patch)
     set((state) => ({
       members: state.members.map((member) => (
-        member.id === memberId ? { ...member, ...dimensions } : member
+        member.id === memberId ? { ...member, ...patch } : member
+      )),
+    }))
+  },
+
+  updateMemberGrain: async (memberId, grainDir) => {
+    const previous = get().members.find((member) => member.id === memberId)
+    if (!previous || previous.grainDir === grainDir) return
+    const patch: Partial<Member> = { grainDir, cutRev: nextCutRev(previous.cutRev) }
+    await db.members.update(memberId, patch)
+    set((state) => ({
+      members: state.members.map((member) => (
+        member.id === memberId ? { ...member, ...patch } : member
       )),
     }))
   },
